@@ -343,13 +343,34 @@ def health_check():
 
 # --- Running ---
 if __name__ == "__main__":
-    # 1. Start Telegram Bot in a separate background thread
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.daemon = True
-    bot_thread.start()
-    
-    # 2. Start Flask Web Server on the main thread
-    # Render requires the web server to run on the PORT they provide
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🌐 Web server starting on port {port}")
-    web_app.run(host='0.0.0.0', port=port)
+    # 1. Run Flask in background thread
+    import threading
+    from flask import Flask
+    web_app = Flask(__name__)
+
+    @web_app.route('/')
+    def health_check():
+        return "Bot is alive and running", 200
+
+    def run_flask():
+        port = int(os.environ.get("PORT", 5000))
+        print(f"🌐 Web server starting on port {port}")
+        web_app.run(host='0.0.0.0', port=port)
+
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    # 2. Run BOT in the main thread (to avoid set_wakeup_fd error)
+    if not TOKEN:
+        print("❌ TELEGRAM_TOKEN is not set!")
+    else:
+        app = Application.builder().token(TOKEN).build()
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("stop", stop))
+        app.add_handler(CommandHandler("status", status))
+        app.add_handler(CommandHandler("setinterval", set_interval))
+        app.add_handler(CallbackQueryHandler(button_handler))
+        
+        print("🤖 BOT is running (Polling mode in Main Thread)")
+        app.run_polling()
